@@ -275,11 +275,12 @@ namespace OpenRA
 
 		public static void SetupRelationshipColors(Player[] players, Player viewer, WorldRenderer worldRenderer, bool firstRun)
 		{
-			foreach (var p in players)
-			{
-				p.Color = PlayerRelationshipColor(p, viewer);
-				worldRenderer.UpdatePalettesForPlayer(p.InternalName, p.Color, !firstRun);
-			}
+            // Apply local colour overrides if enabled, otherwise fall back to relationship colours.
+            foreach (var p in players)
+            {
+                p.Color = PlayerLocalColor(p, viewer, players);
+                worldRenderer.UpdatePalettesForPlayer(p.InternalName, p.Color, !firstRun);
+            }
 		}
 
 		public static Color PlayerRelationshipColor(Player player, Player viewer)
@@ -298,6 +299,62 @@ namespace OpenRA
 
 			return ChromeMetrics.Get<Color>("PlayerStanceColorEnemies");
 		}
+
+        /// <summary>
+        /// Determines the colour that should be used for a given player from the perspective of
+        /// the local viewer. This method first checks the local colour mask defined in
+        /// Game.Settings.Game.LocalPlayerColorMask when UseLocalPlayerColors is enabled. If a
+        /// matching entry exists and can be parsed then that colour is used. Otherwise, if
+        /// UseLocalPlayerColors is enabled and the game is a two‑team matchup with at least two
+        /// human players on each side, then allies are mapped to blue and enemies to red. In all
+        /// other cases the normal PlayerRelationshipColor is returned.
+        /// </summary>
+        public static Color PlayerLocalColor(Player player, Player viewer, Player[] players)
+        {
+            // Fallback to relationship colours when the feature is disabled or when no viewer is set.
+            var settings = Game.Settings.Game;
+            if (!settings.UseLocalPlayerColors || viewer == null || viewer.Spectating)
+                return PlayerRelationshipColor(player, viewer);
+
+            // Try to look up a per‑player override. Keys are the player's internal name.
+            if (settings.LocalPlayerColorMask != null &&
+                player != null &&
+                settings.LocalPlayerColorMask.TryGetValue(player.InternalName, out var overrideValue))
+            {
+                if (OpenRA.Primitives.Color.TryParse(overrideValue, out var overrideColor))
+                    return overrideColor;
+            }
+
+            // Determine if this is a two‑team game with at least two human players on each side.
+            // Count the number of allies and enemies (excluding the viewer) for the viewer.
+            var allyCount = 0;
+            var enemyCount = 0;
+            foreach (var p in players)
+            {
+                if (p == null || p == viewer || p.NonCombatant)
+                    continue;
+
+                var rel = viewer.RelationshipWith(p);
+                if (rel == PlayerRelationship.Ally)
+                    allyCount++;
+                else if (rel == PlayerRelationship.Enemy)
+                    enemyCount++;
+            }
+
+            var twoTeamGame = allyCount >= 2 && enemyCount >= 2;
+            if (twoTeamGame)
+            {
+                var rel = viewer.RelationshipWith(player);
+                // Assign a default blue palette to allied players (including self) and red to enemies.
+                if (rel == PlayerRelationship.Ally)
+                    return OpenRA.Primitives.Color.FromArgb(255, 0, 0, 255); // Blue (opaque)
+                else if (rel == PlayerRelationship.Enemy)
+                    return OpenRA.Primitives.Color.FromArgb(255, 255, 0, 0); // Red (opaque)
+            }
+
+            // Fallback to normal relationship colours.
+            return PlayerRelationshipColor(player, viewer);
+        }
 
 		internal void PlayerDisconnected(Player p)
 		{
