@@ -284,6 +284,25 @@ namespace OpenRA
 		public TargetLinesType TargetLines = TargetLinesType.Manual;
 		public bool UsePlayerStanceColors = false;
 
+		// If enabled, override player colours locally on the client using a mask.
+		// This does not affect the colours seen by other players and is purely
+		// a client-side feature. When true the engine will apply the local colour mask
+		// defined in LocalPlayerColorMask (if any) or fall back to a default scheme
+		// for two‑team games (assign blue to allies and red to enemies) when there
+		// are at least two human players on each team. See Player.PlayerLocalColor
+		// for the implementation details.
+		public bool UseLocalPlayerColors = false;
+
+		/// <summary>
+		/// Stores per‑player colour overrides for the local client. The key is the
+		/// player internal name and the value should be a six or eight digit
+		/// hexadecimal ARGB string (without leading '#', e.g. "FF0000" for red or
+		/// "0000FF" for blue). If a value cannot be parsed then the override is
+		/// ignored. This dictionary is not synchronised over the network and has
+		/// no effect on other clients.
+		/// </summary>
+		public System.Collections.Generic.Dictionary<string, string> LocalPlayerColorMask = new();
+
 		public bool AllowDownloading = true;
 
 		[Desc("Filename of the authentication profile to use.")]
